@@ -1,0 +1,569 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id              Int        @id @default(autoincrement())
+  uuid            String     @unique @default(uuid())
+  email           String     @unique
+  password        String
+  firstName       String?
+  lastName        String?
+  phone           String?
+  role            UserRole   @default(CUSTOMER)
+  isActive        Boolean    @default(true)
+  emailVerified   Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // Relations
+  addresses       Address[]
+  orders          Order[]
+  cart            Cart?
+  reviews         Review[]
+  wishlist        Wishlist[]
+
+  @@index([email])
+  @@index([uuid])
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+  SUPER_ADMIN
+}
+
+// ============================================
+// PRODUCT MANAGEMENT
+// ============================================
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  image       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  products    Product[]
+
+  @@index([slug])
+  @@index([uuid])
+}
+
+model Brand {
+  id          Int      @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  logo        String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  products    Product[]
+
+  @@index([slug])
+  @@index([uuid])
+}
+
+// --- NEW MODEL: For standardized size management (e.g., US, EU, UK) ---
+model Size {
+  id          Int        @id @default(autoincrement())
+  uuid        String     @unique @default(uuid())
+  sizeValue   ShoeSize   @unique // e.g., US_8, EU_41
+  displayValue String   // e.g., "8 US", "41 EU"
+  system      String     // e.g., "US", "EU", "UK"
+
+  // Relations
+  productVariants ProductVariant[]
+
+  @@index([sizeValue])
+  @@index([uuid])
+}
+
+enum ShoeSize {
+  // Baby and Toddler Sizes (Infant/Nursery: Approx. EU 15 to EU 26)
+  EU_15
+  EU_16
+  EU_17
+  EU_18
+  EU_19
+  EU_20
+  EU_21
+  EU_22
+  EU_23
+  EU_24
+  EU_25
+  EU_26
+
+  // Little Kid and Big Kid Sizes (Junior/Youth: Approx. EU 27 to EU 34)
+  EU_27
+  EU_27_5
+  EU_28
+  EU_28_5
+  EU_29
+  EU_29_5
+  EU_30
+  EU_30_5
+  EU_31
+  EU_31_5
+  EU_32
+  EU_32_5
+  EU_33
+  EU_33_5
+  EU_34
+  EU_34_5
+
+  // Standard Adult Sizes (Most Common Range: Approx. EU 35 to EU 47)
+  EU_35
+  EU_35_5
+  EU_36
+  EU_36_5
+  EU_37
+  EU_37_5
+  EU_38
+  EU_38_5
+  EU_39
+  EU_39_5
+  EU_40
+  EU_40_5
+  EU_41
+  EU_41_5
+  EU_42
+  EU_42_5
+  EU_43
+  EU_43_5
+  EU_44
+  EU_44_5
+  EU_45
+  EU_45_5
+  EU_46
+  EU_46_5
+  EU_47
+  EU_47_5
+
+  // Extra Large Adult Sizes
+  EU_48
+  EU_48_5
+  EU_49
+  EU_49_5
+  EU_50
+  EU_50_5
+  EU_51
+  EU_51_5
+  EU_52
+}
+
+
+model Product {
+  id                Int              @id @default(autoincrement())
+  uuid              String           @unique @default(uuid())  // For public URLs
+  name              String
+  slug              String           @unique
+  description       String?
+  basePrice         Decimal          @db.Decimal(10, 2)
+  
+  categoryId        Int
+  brandId           Int
+  
+  gender            Gender?
+  // color           String? // Moved to ProductVariant to better reflect reality
+  
+  // Specific to Shoes
+  upperMaterial     String?         // e.g., Leather, Canvas, Synthetic
+  soleMaterial      String?         // e.g., Rubber, EVA, Polyurethane
+  heelHeight        Decimal?        @db.Decimal(5, 2)
+  closureType       String?         // e.g., Laces, Velcro, Slip-on
+
+  isFeatured        Boolean          @default(false)
+  isActive          Boolean          @default(true)
+  
+  // SEO & Sharing
+  metaTitle         String?
+  metaDescription   String?
+  
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  // Relations
+  category          Category         @relation(fields: [categoryId], references: [id])
+  brand             Brand            @relation(fields: [brandId], references: [id])
+  variants          ProductVariant[]
+  images            ProductImage[]
+  reviews           Review[]
+  wishlist          Wishlist[]
+
+  @@index([slug])
+  @@index([uuid])
+  @@index([categoryId])
+  @@index([brandId])
+}
+
+enum Gender {
+  MEN
+  WOMEN
+  UNISEX
+  KIDS
+}
+
+model ProductVariant {
+  id          Int      @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  productId   Int
+  sku         String   @unique
+  
+  // CRITICAL CHANGE: Use relation to Size model instead of raw String
+  sizeId      Int
+  color       String?  // e.g., "Black", "Royal Blue"
+  colorHex    String?  // e.g., "#000000"
+  
+  stock       Int      @default(0)
+  price       Decimal  @db.Decimal(10, 2)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size        Size     @relation(fields: [sizeId], references: [id]) // New relation
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+
+  @@index([productId])
+  @@index([sizeId])
+  @@unique([productId, sizeId, color]) // Ensure a product doesn't have duplicate size/color variants
+  @@index([sku])
+  @@index([uuid])
+}
+
+model ProductImage {
+  id          Int      @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  productId   Int
+  url         String
+  alt         String?
+  isPrimary   Boolean  @default(false)
+  order       Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+
+  // Relations
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([uuid])
+}
+
+// ============================================
+// SHOPPING CART
+// ============================================
+
+model Cart {
+  id          Int        @id @default(autoincrement())
+  uuid        String     @unique @default(uuid())
+  userId      Int        @unique
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       CartItem[]
+
+  @@index([uuid])
+}
+
+model CartItem {
+  id          Int              @id @default(autoincrement())
+  uuid        String           @unique @default(uuid())
+  cartId      Int
+  variantId   Int
+  quantity    Int              @default(1)
+  
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  cart        Cart             @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variant     ProductVariant   @relation(fields: [variantId], references: [id])
+
+  @@unique([cartId, variantId])
+  @@index([cartId])
+  @@index([uuid])
+}
+
+// ============================================
+// ORDERS & PAYMENTS
+// ============================================
+
+model Order {
+  id                Int         @id @default(autoincrement())
+  uuid              String      @unique @default(uuid())
+  orderNumber       String      @unique
+  userId            Int
+  
+  status            OrderStatus @default(PENDING)
+  
+  subtotal          Decimal     @db.Decimal(10, 2)
+  tax               Decimal     @db.Decimal(10, 2) @default(0)
+  shippingCost      Decimal     @db.Decimal(10, 2) @default(0)
+  
+  // NEW FIELD: Applied discount amount
+  discountAmount    Decimal     @db.Decimal(10, 2) @default(0)
+  discountId        Int?        // NEW FIELD: Relation to the used coupon/discount
+  
+  total             Decimal     @db.Decimal(10, 2)
+  
+  shippingAddressId Int
+  
+  notes             String?
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  // Relations
+  user              User        @relation(fields: [userId], references: [id])
+  shippingAddress   Address     @relation(fields: [shippingAddressId], references: [id])
+  discount          Discount?   @relation(fields: [discountId], references: [id])
+  items             OrderItem[]
+  payment           Payment?
+  shipment          Shipment?
+
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([uuid])
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+model OrderItem {
+  id          Int              @id @default(autoincrement())
+  uuid        String           @unique @default(uuid())
+  orderId     Int
+  variantId   Int
+  
+  quantity    Int
+  price       Decimal          @db.Decimal(10, 2) // Price at time of order (per unit)
+  subtotal    Decimal          @db.Decimal(10, 2)
+  
+  createdAt   DateTime         @default(now())
+
+  // Relations
+  order       Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant     ProductVariant   @relation(fields: [variantId], references: [id])
+
+  @@index([orderId])
+  @@index([uuid])
+}
+
+model Payment {
+  id              Int             @id @default(autoincrement())
+  uuid            String          @unique @default(uuid())
+  orderId         Int             @unique
+  
+  amount          Decimal         @db.Decimal(10, 2)
+  currency        String          @default("USD")
+  
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  
+  transactionId   String?         @unique
+  
+  paidAt          DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  order           Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@index([uuid])
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  DEBIT_CARD
+  PAYPAL
+  STRIPE
+  CASH_ON_DELIVERY
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// ============================================
+// PROMOTIONS & DISCOUNTS (NEW SECTION)
+// ============================================
+
+model Discount {
+  id            Int             @id @default(autoincrement())
+  uuid          String          @unique @default(uuid())
+  
+  code          String          @unique // The coupon code (e.g., "SHOEFAN20")
+  type          DiscountType    // PERCENT or FIXED
+  value         Decimal         @db.Decimal(10, 2)
+  
+  minOrderTotal Decimal?        @db.Decimal(10, 2) // Optional minimum purchase requirement
+  
+  isActive      Boolean         @default(true)
+  expiresAt     DateTime?
+  
+  // Usage tracking
+  maxUses       Int?
+  currentUses   Int             @default(0)
+  
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  // Relations
+  orders        Order[] // Orders that used this discount
+
+  @@index([code])
+  @@index([uuid])
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+  FREE_SHIPPING
+}
+
+// ============================================
+// SHIPPING & ADDRESS
+// ============================================
+
+model Address {
+  id          Int      @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  userId      Int
+  
+  fullName    String
+  phone       String
+  
+  street      String
+  city        String
+  state       String
+  zipCode     String
+  country     String
+  
+  isDefault   Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders      Order[]
+
+  @@index([userId])
+  @@index([uuid])
+}
+
+model Shipment {
+  id              Int              @id @default(autoincrement())
+  uuid            String           @unique @default(uuid())
+  orderId         Int              @unique
+  
+  carrier         String?
+  trackingNumber  String?
+  
+  status          ShipmentStatus   @default(PENDING)
+  
+  shippedAt       DateTime?
+  estimatedAt     DateTime?
+  deliveredAt     DateTime?
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  order           Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([trackingNumber])
+  @@index([uuid])
+}
+
+enum ShipmentStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+}
+
+// ============================================
+// REVIEWS & WISHLIST
+// ============================================
+
+model Review {
+  id          Int      @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  userId      Int
+  productId   Int
+  
+  rating      Int      // 1-5
+  title       String?
+  comment     String?
+  
+  isVerified  Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([productId])
+  @@index([uuid])
+}
+
+model Wishlist {
+  id          Int      @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  userId      Int
+  productId   Int
+  
+  createdAt   DateTime @default(now())
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([uuid])
+}
